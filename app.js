@@ -1,28 +1,23 @@
-// eslint-disable-next-line import/no-extraneous-dependencies
+/* eslint-disable no-console */
+// подключение express
 const express = require('express');
-
-const { PORT = 3000 } = process.env;
-
+const mongoose = require('mongoose');
+// создаем объект приложения
 const app = express();
 
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`App listening on port ${PORT}`);
+mongoose.connect('mongodb://127.0.0.1:27017/mestodb')
+  .then(() => {
+    console.log('база данных подключена');
+  })
+  .catch(() => {
+    console.log('Не удается подключиться к базе данных');
+  });
+
+// определяем обработчик для маршрута "/"
+app.get('/', (req, res) => {
+  // отправляем ответ
+  res.send('<h2>Привет Express!</h2>');
 });
 
-// eslint-disable-next-line no-undef
-mongoose.connect('mongodb://localhost:27017/mydb', {
-  useNewUrlParser: true,
-  useCreateIndex: true,
-  useFindAndModify: false,
-});
-
-app.use((req, res, next) => {
-  req.user = {
-    _id: '5d8b8592978f8bd833ca8133', // вставьте сюда _id созданного в предыдущем пункте пользователя
-  };
-
-  next();
-});
-
+// начинаем прослушивать подключения на 3000 порту
 app.listen(3000);
