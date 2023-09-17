@@ -13,6 +13,14 @@ mongoose.connect('mongodb://127.0.0.1:27017/mestodb')
     console.log('Не удается подключиться к базе данных');
   });
 
+app.use((req, next) => {
+  req.user = {
+    _id: '5d8b8592978f8bd833ca8133',
+  };
+
+  next();
+});
+
 // определяем обработчик для маршрута "/"
 app.get('/', (req, res) => {
   // отправляем ответ
