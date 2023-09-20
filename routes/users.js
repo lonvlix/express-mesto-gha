@@ -1,12 +1,22 @@
-const user = require('express').Router();
+const router = require('express').Router();
 
-// eslint-disable-next-line object-curly-newline
-const { getUsers, getUser, getMe, updateUserName, updateUserAvatar } = require('../controllers/user');
+const {
+  getUsers,
+  getUserById,
+  createUser,
+  updateUserAvatar,
+  updateUser,
+} = require('../controllers/users');
 
-user.get('/', getUsers);
-user.get('/me', getMe);
-user.get('/:userId', getUser);
-user.patch('/me', updateUserName);
-user.patch('/me/avatar', updateUserAvatar);
+// Все пользователи
+router.get('/', getUsers);
+// Конкретный пользователь по его id
+router.get('/:userId', getUserById);
+// Создание нового пользователя
+router.post('/', createUser);
+// Редактирование аватара пользователя
+router.patch('/me/avatar', updateUserAvatar);
+// Редактирование данных о пользователе:
+router.patch('/me', updateUser);
 
-module.exports = user;
+module.exports = router;

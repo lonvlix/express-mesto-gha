@@ -1,0 +1,14 @@
+// Сохранение статусов ответов в константы
+const OK_STATUS = 200;
+const HTTP_CREATED_STATUS = 201;
+const HTTP_BAD_REQUEST_STATUS = 400;
+const NOT_FOUND_PAGE_STATUS = 404;
+const SERVER_ERROR_STATUS = 500;
+
+module.exports = {
+  OK_STATUS,
+  HTTP_CREATED_STATUS,
+  HTTP_BAD_REQUEST_STATUS,
+  NOT_FOUND_PAGE_STATUS,
+  SERVER_ERROR_STATUS,
+};

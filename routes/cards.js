@@ -1,12 +1,22 @@
-const card = require('express').Router();
+const router = require('express').Router();
 
-// eslint-disable-next-line object-curly-newline
-const { getCards, deleteCard, createCard, likeCard, dislikeCard } = require('../controllers/card');
+const {
+  getCards,
+  createcard,
+  deleteCard,
+  likeCard,
+  dislikeCard,
+} = require('../controllers/cards');
 
-card.get('/', getCards);
-card.post('/', createCard);
-card.delete('/:cardId', deleteCard);
-card.put('/:cardId/likes', likeCard);
-card.delete('/:cardId/likes', dislikeCard);
+// Маршрут всех карточек:
+router.get('/', getCards);
+// Маршрут для новой карточки:
+router.post('/', createcard);
+// Маршрут для удаления карточки:
+router.delete('/:cardId', deleteCard);
+// Маршрут для постановки лайка на карточку:
+router.put('/:cardId/likes', likeCard);
+// Маршрут для снятия лайка с карточки:
+router.delete('/:cardId/likes', dislikeCard);
 
-module.exports = card;
+module.exports = router;
