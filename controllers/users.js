@@ -1,131 +1,185 @@
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { SICRET_KEY } = require('../utils/constants');
 const User = require('../models/user');
 
-// Импорты констант статусов ответа сервера из файла constants.js
-const {
-  OK_STATUS,
-  HTTP_CREATED_STATUS,
-  HTTP_BAD_REQUEST_STATUS,
-  NOT_FOUND_PAGE_STATUS,
-  SERVER_ERROR_STATUS,
-} = require('../utils/constants');
+// Импорты констант статусов ответа сервера из файла
+// constants.js и классовых ошибок из errors
+const UnauthorizedError = require('../errors/Unauthorized');
+const ConflictError = require('../errors/Conflict');
+const BadRequestError = require('../errors/BadRequest');
+const NotFoundError = require('../errors/NotFound');
+const { HTTP_CREATED_STATUS } = require('../utils/constants');
 
 // Получение пользователей из базы данных mongodb
-module.exports.getUsers = (_, res) => {
+function getUsers(_, res, next) {
   User.find({})
-    .then((users) => res.send(users))
-    .catch(() => res.status(SERVER_ERROR_STATUS).send({
-      message: 'На сервере произошла ошибка, статус ответа сервера - 500.',
-    }));
-};
+    .then((users) => res.send({ users }))
+    .catch(next);
+}
 
 // Пользователь по id
-module.exports.getUserById = (req, res) => {
-  User.findById(req.params.userId)
-    .orFail()
-    .then((user) => res.status(OK_STATUS).send(user))
+function getUserById(req, res, next) {
+  const { id } = req.params;
+  User.findById(id)
+    .then((user) => {
+      if (user) return res.send({ user });
+      throw new NotFoundError('Пользователь c указанным id не найден');
+    })
     .catch((err) => {
       if (err.name === 'CastError') {
-        return res.status(HTTP_BAD_REQUEST_STATUS).send({
-          message: 'При поиске пользователя были переданы некорректные данные',
-        });
-      }
-
-      if (err.name === 'DocumentNotFoundError') {
-        return res.status(NOT_FOUND_PAGE_STATUS).send({
-          message: 'Пользователь c указанным _id не найден',
-        });
-      }
-
-      return res.status(SERVER_ERROR_STATUS).send({
-        message: 'На сервере произошла ошибка, статус ответа сервера - 500.',
-      });
-    });
-};
-
-// Создание пользователя
-module.exports.createUser = (req, res) => {
-  const { name, about, avatar } = req.body;
-
-  User.create({ name, about, avatar })
-    .then((user) => res.status(HTTP_CREATED_STATUS).send(user))
-    .catch((err) => {
-      if (err.name === 'ValidationError') {
-        res.status(HTTP_BAD_REQUEST_STATUS).send({
-          message:
-            'При создании пользователя были переданы некорректные данные',
-        });
+        next(new BadRequestError('Передача некорректного id'));
       } else {
-        res.status(SERVER_ERROR_STATUS).send({
-          message: 'На сервере произошла ошибка, статус ответа сервера - 500.',
-        });
+        next(err);
       }
     });
-};
+}
 
-// Редактирование аватара пользователя
-module.exports.updateUserAvatar = (req, res) => {
-  const { avatar } = req.body;
-
-  User.findByIdAndUpdate(
-    req.user._id,
-    { avatar },
-    { new: true, runValidators: true },
-  )
-    .orFail()
-    .then((user) => res.status(OK_STATUS).send(user))
-    .catch((err) => {
-      if (err.name === 'DocumentNotFoundError') {
-        return res.status(NOT_FOUND_PAGE_STATUS).send({
-          message: 'Данный пользователь не был найден',
-        });
-      }
-
-      if (err.name === 'ValidationError') {
-        const validationErrors = Object.values(err.errors).map(
-          (error) => error.message,
-        );
-        return res.status(HTTP_BAD_REQUEST_STATUS).send({
-          message: 'При обновлении аватара были переданы некорректные данные',
-          validationErrors,
-        });
-      }
-
-      return res.status(SERVER_ERROR_STATUS).send({
-        message: 'На сервере произошла ошибка, статус ответа сервера - 500.',
+// Регистрация пользователя
+function registration(req, res, next) {
+  const {
+    email, password, name, about, avatar,
+  } = req.body;
+  bcrypt
+    .hash(password, 10)
+    .then((hash) => User.create({
+      email,
+      password: hash,
+      name,
+      about,
+      avatar,
+    }))
+    .then((user) => {
+      const { _id } = user;
+      return res.status(HTTP_CREATED_STATUS).send({
+        email,
+        name,
+        about,
+        avatar,
+        _id,
       });
+    })
+    .catch((err) => {
+      if (err.code === 11000) {
+        next(
+          new ConflictError(
+            'Пользователь с данным электронным адресом уже зарегистрирован',
+          ),
+        );
+      } else if (err.name === 'ValidationError') {
+        next(
+          new BadRequestError(
+            'Передача некорректных данные при регистрации пользователя',
+          ),
+        );
+      } else {
+        next(err);
+      }
     });
-};
+}
+
+// Логин пользователя
+function login(req, res, next) {
+  const { email, password } = req.body;
+  User.findUserByCredentials(email, password)
+    .then(({ _id: userId }) => {
+      if (userId) {
+        const token = jwt.sign({ userId }, SICRET_KEY, {
+          expiresIn: '7d',
+        });
+        return res.send({ _id: token });
+      }
+      throw new UnauthorizedError('Неправильные почта или пароль');
+    })
+    .catch(next);
+}
+
+// Пользователь
+function getUserInfo(req, res, next) {
+  const { userId } = req.user;
+  User.findById(userId)
+    .then((user) => {
+      if (user) return res.send({ user });
+      throw new NotFoundError('Пользователь c указанным id не найден');
+    })
+    .catch((err) => {
+      if (err.name === 'CastError') {
+        next(new BadRequestError('Передача некорректного id'));
+      } else {
+        next(err);
+      }
+    });
+}
 
 // Редактирование профиля пользователя
-module.exports.updateUser = (req, res) => {
+function updateUser(req, res, next) {
   const { name, about } = req.body;
-
+  const { userId } = req.user;
   User.findByIdAndUpdate(
-    req.user._id,
-    { name, about },
-    { new: true, runValidators: true },
+    userId,
+    {
+      name,
+      about,
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
   )
-    .orFail()
-    .then((user) => res.status(OK_STATUS).send(user))
+    .then((user) => {
+      if (user) return res.send({ user });
+      throw new NotFoundError('Пользователь c указанным id не найден');
+    })
     .catch((err) => {
-      if (err.name === 'DocumentNotFoundError') {
-        return res.status(NOT_FOUND_PAGE_STATUS).send({
-          message: 'Данный пользователь не найден',
-        });
-      }
-
-      if (err.name === 'ValidationError') {
-        const validationErrors = Object.values(err.errors).map(
-          (error) => error.message,
+      if (err.name === 'ValidationError' || err.name === 'CastError') {
+        next(
+          new BadRequestError(
+            'Передача некорректных данных при попытке обновления профиля',
+          ),
         );
-        return res.status(HTTP_BAD_REQUEST_STATUS).send({
-          message: 'При обновлении профиля были переданы некорректные данные',
-          validationErrors,
-        });
+      } else {
+        next(err);
       }
-
-      return res.status(SERVER_ERROR_STATUS).send({
-        message: 'На сервере произошла ошибка, статус ответа сервера - 500.',
-      });
     });
+}
+
+// Редактирование аватара пользователя
+function updateUserAvatar(req, res, next) {
+  const { avatar } = req.body;
+  const { userId } = req.user;
+  User.findByIdAndUpdate(
+    userId,
+    {
+      avatar,
+    },
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
+    .then((user) => {
+      if (user) return res.send({ user });
+      throw new NotFoundError('Пользователь c указанным id не найден');
+    })
+    .catch((err) => {
+      if (err.name === 'ValidationError' || err.name === 'CastError') {
+        next(
+          new BadRequestError(
+            'Передача некорректных данных при попытке обновления аватара',
+          ),
+        );
+      } else {
+        next(err);
+      }
+    });
+}
+
+module.exports = {
+  registration,
+  login,
+  getUsers,
+  getUserById,
+  getUserInfo,
+  updateUser,
+  updateUserAvatar,
 };

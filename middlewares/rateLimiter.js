@@ -1,4 +1,3 @@
-// eslint-disable-next-line import/no-unresolved
 const rateLimiter = require('express-rate-limit');
 
 // Ограничитель запросов

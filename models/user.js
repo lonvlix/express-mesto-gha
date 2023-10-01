@@ -1,45 +1,83 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
 
-// Пакет validator - это библиотека для проверки и валидации данных в Node.js.
-// Он предоставляет набор функций, которые облегчают проверку различных типов данных,
-// таких как строки, числа, URL-адреса, электронные адреса и другие.
-const validator = require('validator');
+const { Schema } = mongoose;
+
+const { URL_PATTERN } = require('../utils/constants');
 
 // Cоздание схемы пользователя
-const userSchema = new mongoose.Schema(
+const userSchema = new Schema(
   {
-    name: {
-      type: String,
-      required: [true, 'Поле "name" должно быть заполнено обязательно'],
-      minlength: [2, 'Минимальное количество символов для поля "name" - 2'],
-      maxlength: [
-        30,
-        'Максимальное количество символов для поля "name" - 30',
-      ],
-    },
-    about: {
-      type: String,
-      required: [true, 'Поле "about" должно быть заполнено'],
-      minlength: [
-        2,
-        'Минимальное количество символов для поля "about" - 2',
-      ],
-      maxlength: [
-        30,
-        'Максимальное количество символов для поля "about" - 30',
-      ],
-    },
-    avatar: {
+    email: {
       type: String,
       required: true,
+      unique: true,
       validate: {
-        validator: (url) => validator.isURL(url),
+        validator: (email) => /.+@.+\..+/.test(email),
+        message: 'Введите электронный адрес',
+      },
+    },
+
+    password: {
+      type: String,
+      required: true,
+      select: false,
+      validate: {
+        validator: ({ length }) => length >= 6,
+        message: 'Пароль должен состоять минимум из 6 символов',
+      },
+    },
+
+    name: {
+      type: String,
+      default: 'Жак-Ив Кусто',
+      validate: {
+        validator: ({ length }) => length >= 2 && length <= 30,
+        message: 'Имя пользователя должно быть длиной от 2 до 30 символов',
+      },
+    },
+
+    about: {
+      type: String,
+      default: 'Исследователь',
+      validate: {
+        validator: ({ length }) => length >= 2 && length <= 30,
         message:
-          'Введенный URL адрес некорректный, введите корректный URL',
+          'Информация о пользователе должна быть длиной от 2 до 30 символов',
+      },
+    },
+
+    avatar: {
+      type: String,
+      default:
+        'https://pictures.s3.yandex.net/resources/jacques-cousteau_1604399756.png',
+      validate: {
+        validator: (url) => URL_PATTERN.test(url),
+        message: 'Введите URL',
       },
     },
   },
-  { versionKey: false },
+
+  {
+    versionKey: false,
+    statics: {
+      findUserByCredentials(email, password) {
+        return this.findOne({ email })
+          .select('+password')
+          .then((user) => {
+            if (user) {
+              return bcrypt.compare(password, user.password).then((matched) => {
+                if (matched) return user;
+
+                return Promise.reject();
+              });
+            }
+
+            return Promise.reject();
+          });
+      },
+    },
+  },
 );
 
 module.exports = mongoose.model('user', userSchema);

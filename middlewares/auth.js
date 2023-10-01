@@ -1,4 +1,3 @@
-// eslint-disable-next-line import/no-unresolved
 const jwt = require('jsonwebtoken');
 
 const { SICRET_KEY } = require('../utils/constants');

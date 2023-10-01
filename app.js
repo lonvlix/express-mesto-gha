@@ -1,10 +1,32 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const { errors } = require('celebrate');
 const helmet = require('helmet');
-const routes = require('./routes/router');
+const bodyParser = require('body-parser');
+const limiter = require('./middlewares/rateLimiter');
+const routeSignup = require('./routes/signup');
+const routeSignin = require('./routes/signin');
+const auth = require('./middlewares/auth');
+const routeUsers = require('./routes/users');
+const routeCards = require('./routes/cards');
+const errorHandler = require('./middlewares/errorHandler');
+
+const URL = 'mongodb://127.0.0.1:27017/mestodb';
+const NotFoundError = require('./errors/NotFound');
 
 // Определение порта для работы бекенда
 const { PORT = 3000 } = process.env;
+
+mongoose.set('strictQuery', true);
+
+mongoose
+  .connect(URL)
+  .then(() => {
+    console.log('БД подключена');
+  })
+  .catch(() => {
+    console.log('Не удалось подключиться к БД');
+  });
 
 // Создание экземпляра приложения Express.js
 const app = express();
@@ -13,42 +35,21 @@ const app = express();
 // в качестве промежуточного обработчика (middleware) в приложении Express.js.
 app.use(helmet());
 
-// Отключение заголовка "x-powered-by"
-app.disable('x-powered-by');
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-// Парсинг JSON-запросов
-app.use(express.json());
+app.use(limiter);
 
-// Установка значения для свойства user в объекте req
-app.use((req, res, next) => {
-  req.user = {
-    _id: '65095c02c416aab0d44c47c6',
-    /*
-{
-    "name": "Elizaveta",
-    "about": "Frontend-Developer",
-    "avatar": "https://media.istockphoto.com/id/1367357589/ru/%D1%84%D0%BE%D1%82%D0%BE/%D0%BA%D1%80%D0%B0%D1%81%D0%BD%D0%BE%D0%B5-%D1%81%D0%B5%D1%80%D0%B4%D1%86%D0%B5-%D0%B2-%D1%84%D0%BE%D1%80%D0%BC%D0%B5-%D0%BD%D0%B5%D0%B1%D0%B0-%D0%BD%D0%B0-%D0%B7%D0%B0%D0%BA%D0%B0%D1%82%D0%B5-%D0%BA%D1%80%D0%B0%D1%81%D0%B8%D0%B2%D1%8B%D0%B9-%D0%BF%D0%B5%D0%B9%D0%B7%D0%B0%D0%B6-%D1%81-%D1%86%D0%B2%D0%B5%D1%82%D0%B0%D0%BC%D0%B8-%D0%BB%D1%8E%D0%B1%D0%BE%D0%B2%D0%BD%D1%8B%D0%B9-%D1%84%D0%BE%D0%BD-%D1%81-%D0%BA%D0%BE%D0%BF%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BB%D1%8C%D0%BD%D1%8B%D0%BC.jpg?b=1&s=612x612&w=0&k=20&c=cSc-zEW78iLrAxekgwvFbsmniBnw3AZ_ziKL6e0kZos=",
-    "_id": "65095c02c416aab0d44c47c6"
-}
-    */
-  };
-  next();
-});
+app.use('/', routeSignup);
+app.use('/', routeSignin);
 
-// Подключение маршрутов приложения
-app.use(routes);
+app.use(auth);
 
-// Подключение к базе данных Mongodb и таблице mestodb
-mongoose
-  .connect('mongodb://127.0.0.1:27017/mestodb')
-  .then(() => {
-    console.log('БД успешно подключена');
-  })
-  .catch(() => {
-    console.log('Не удается подключиться к БД, проверьте правильность подключения пути');
-  });
+app.use('/users', routeUsers);
+app.use('/cards', routeCards);
 
-// Запуск сервера на 3000 порту
-app.listen(PORT, () => {
-  console.log(`App listening on port ${PORT}`);
-});
+app.use((req, res, next) => next(new NotFoundError('Запрашиваемый ресурс не найден.')));
+app.use(errors());
+app.use(errorHandler);
+
+app.listen(PORT);
